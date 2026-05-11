@@ -60,7 +60,7 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
 
-    df = pd.read_csv(uploaded_file)
+    df = pd.read_csv(uploaded_file,encoding='latin1')
 
     st.subheader("📊 Preview do Dataset")
     st.dataframe(df.head())
