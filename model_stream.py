@@ -109,7 +109,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🤖 ML + Forecast Trainer")
+st.title("🤖 ML + Model Trainer")
 
 st.markdown("""
 Treine modelos de:
