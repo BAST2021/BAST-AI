@@ -1019,4 +1019,3 @@ else:
     st.info(
         "📌 Faça upload de um CSV."
     )
-```
