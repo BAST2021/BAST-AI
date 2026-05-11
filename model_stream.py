@@ -1,3 +1,4 @@
+```python id="full_ml_timeseries_app_2026"
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -5,7 +6,12 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+# ==========================================
+# SKLEARN
+# ==========================================
+
 from sklearn.model_selection import train_test_split
+
 from sklearn.preprocessing import (
     StandardScaler,
     OneHotEncoder,
@@ -13,7 +19,9 @@ from sklearn.preprocessing import (
 )
 
 from sklearn.impute import SimpleImputer
+
 from sklearn.pipeline import Pipeline
+
 from sklearn.compose import ColumnTransformer
 
 from sklearn.metrics import (
@@ -23,36 +31,71 @@ from sklearn.metrics import (
     mean_squared_error,
     mean_absolute_error,
     r2_score,
+    mean_absolute_percentage_error
 )
 
-# =========================
-# MODELOS CLASSIFICAÇÃO
-# =========================
+# ==========================================
+# CLASSIFICAÇÃO
+# ==========================================
 
 from sklearn.linear_model import LogisticRegression
+
 from sklearn.tree import DecisionTreeClassifier
+
 from sklearn.ensemble import (
     RandomForestClassifier,
     GradientBoostingClassifier
 )
 
 from sklearn.svm import SVC
+
 from sklearn.neighbors import KNeighborsClassifier
+
 from sklearn.naive_bayes import GaussianNB
 
-# =========================
-# MODELOS REGRESSÃO
-# =========================
+# ==========================================
+# REGRESSÃO
+# ==========================================
 
 from sklearn.linear_model import LinearRegression
+
 from sklearn.tree import DecisionTreeRegressor
+
 from sklearn.ensemble import (
     RandomForestRegressor,
     GradientBoostingRegressor
 )
 
 from sklearn.svm import SVR
+
 from sklearn.neighbors import KNeighborsRegressor
+
+# ==========================================
+# XGBOOST
+# ==========================================
+
+from xgboost import (
+    XGBClassifier,
+    XGBRegressor
+)
+
+# ==========================================
+# SÉRIES TEMPORAIS
+# ==========================================
+
+from statsmodels.tsa.holtwinters import (
+    ExponentialSmoothing
+)
+
+from statsmodels.tsa.arima.model import ARIMA
+
+from statsmodels.tsa.statespace.sarimax import (
+    SARIMAX
+)
+
+# ==========================================
+# VISUALIZAÇÃO
+# ==========================================
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -66,17 +109,34 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🤖 ML Model Trainer")
+st.title("🤖 ML + Forecast Trainer")
 
 st.markdown("""
-Faça upload do seu dataset CSV,
-treine modelos de Machine Learning
-e visualize os resultados.
+Treine modelos de:
+- Classificação
+- Regressão
+- Séries Temporais
 """)
 
 # ==========================================
-# FUNÇÃO SEGURA LEITURA CSV
+# FUNÇÕES
 # ==========================================
+
+def calculate_wape(y_true, y_pred):
+
+    y_true = np.array(y_true)
+    y_pred = np.array(y_pred)
+
+    denominator = np.sum(np.abs(y_true))
+
+    if denominator == 0:
+        return 0
+
+    return (
+        np.sum(np.abs(y_true - y_pred))
+        / denominator
+    ) * 100
+
 
 def load_csv(uploaded_file):
 
@@ -122,28 +182,35 @@ if uploaded_file is not None:
     df = load_csv(uploaded_file)
 
     if df is None:
+
         st.error(
             "❌ Não foi possível ler o CSV."
         )
+
         st.stop()
 
     # ==========================================
-    # LIMPEZA INICIAL
+    # LIMPEZA
     # ==========================================
 
     df.columns = df.columns.astype(str)
 
-    # remover duplicadas
     df = df.drop_duplicates()
 
-    # remover colunas totalmente vazias
-    df = df.dropna(axis=1, how='all')
+    df = df.dropna(
+        axis=1,
+        how='all'
+    )
 
-    # remover linhas totalmente vazias
-    df = df.dropna(axis=0, how='all')
+    df = df.dropna(
+        axis=0,
+        how='all'
+    )
 
     if df.empty:
+
         st.error("Dataset vazio.")
+
         st.stop()
 
     # ==========================================
@@ -151,24 +218,34 @@ if uploaded_file is not None:
     # ==========================================
 
     st.subheader("📊 Preview")
+
     st.dataframe(df.head())
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("Linhas", df.shape[0])
+        st.metric(
+            "Linhas",
+            df.shape[0]
+        )
 
     with col2:
-        st.metric("Colunas", df.shape[1])
+        st.metric(
+            "Colunas",
+            df.shape[1]
+        )
 
     with col3:
         st.metric(
-            "Valores Nulos",
+            "Nulos",
             int(df.isnull().sum().sum())
         )
 
     st.subheader("🔎 Tipos")
-    st.dataframe(df.dtypes.astype(str))
+
+    st.dataframe(
+        df.dtypes.astype(str)
+    )
 
     # ==========================================
     # SIDEBAR
@@ -181,20 +258,250 @@ if uploaded_file is not None:
         df.columns
     )
 
-    # Detectar automaticamente
+    # detectar automático
     if (
         df[target_column].dtype == 'object'
         or df[target_column].nunique() < 20
     ):
+
         default_problem = "Classificação"
+
     else:
+
         default_problem = "Regressão"
 
     problem_type = st.sidebar.selectbox(
         "Tipo de Problema",
-        ["Classificação", "Regressão"],
+        [
+            "Classificação",
+            "Regressão",
+            "Série Temporal"
+        ],
         index=0 if default_problem == "Classificação" else 1
     )
+
+    # ==========================================
+    # SÉRIES TEMPORAIS
+    # ==========================================
+
+    if problem_type == "Série Temporal":
+
+        st.subheader("📈 Forecast")
+
+        date_column = st.sidebar.selectbox(
+            "Coluna Data",
+            df.columns
+        )
+
+        value_column = st.sidebar.selectbox(
+            "Coluna Valor",
+            df.columns
+        )
+
+        ts_model = st.sidebar.selectbox(
+            "Modelo",
+            [
+                "Holt Winters",
+                "ARIMA",
+                "SARIMA"
+            ]
+        )
+
+        try:
+
+            ts_df = df[
+                [date_column, value_column]
+            ].copy()
+
+            ts_df[date_column] = pd.to_datetime(
+                ts_df[date_column]
+            )
+
+            ts_df = ts_df.sort_values(
+                by=date_column
+            )
+
+            ts_df = ts_df.set_index(
+                date_column
+            )
+
+            ts_df[value_column] = pd.to_numeric(
+                ts_df[value_column],
+                errors='coerce'
+            )
+
+            ts_df = ts_df.dropna()
+
+            series = ts_df[value_column]
+
+            if len(series) < 10:
+
+                st.error(
+                    "Poucos dados para série temporal."
+                )
+
+                st.stop()
+
+            train_size = int(len(series) * 0.8)
+
+            train = series[:train_size]
+
+            test = series[train_size:]
+
+            if st.button(
+                "Treinar Série Temporal"
+            ):
+
+                # ==========================================
+                # HOLT WINTERS
+                # ==========================================
+
+                if ts_model == "Holt Winters":
+
+                    model = ExponentialSmoothing(
+                        train,
+                        trend='add',
+                        seasonal=None
+                    )
+
+                    fitted_model = model.fit()
+
+                    predictions = fitted_model.forecast(
+                        len(test)
+                    )
+
+                # ==========================================
+                # ARIMA
+                # ==========================================
+
+                elif ts_model == "ARIMA":
+
+                    model = ARIMA(
+                        train,
+                        order=(1, 1, 1)
+                    )
+
+                    fitted_model = model.fit()
+
+                    predictions = fitted_model.forecast(
+                        steps=len(test)
+                    )
+
+                # ==========================================
+                # SARIMA
+                # ==========================================
+
+                else:
+
+                    model = SARIMAX(
+                        train,
+                        order=(1, 1, 1),
+                        seasonal_order=(1, 1, 1, 12)
+                    )
+
+                    fitted_model = model.fit(
+                        disp=False
+                    )
+
+                    predictions = fitted_model.forecast(
+                        steps=len(test)
+                    )
+
+                # ==========================================
+                # MÉTRICAS
+                # ==========================================
+
+                mae = mean_absolute_error(
+                    test,
+                    predictions
+                )
+
+                mse = mean_squared_error(
+                    test,
+                    predictions
+                )
+
+                rmse = np.sqrt(mse)
+
+                mape = (
+                    mean_absolute_percentage_error(
+                        test,
+                        predictions
+                    ) * 100
+                )
+
+                wape = calculate_wape(
+                    test,
+                    predictions
+                )
+
+                col1, col2, col3, col4 = st.columns(4)
+
+                with col1:
+                    st.metric(
+                        "MAE",
+                        f"{mae:.4f}"
+                    )
+
+                with col2:
+                    st.metric(
+                        "RMSE",
+                        f"{rmse:.4f}"
+                    )
+
+                with col3:
+                    st.metric(
+                        "MAPE",
+                        f"{mape:.2f}%"
+                    )
+
+                with col4:
+                    st.metric(
+                        "WAPE",
+                        f"{wape:.2f}%"
+                    )
+
+                # ==========================================
+                # PLOT
+                # ==========================================
+
+                fig, ax = plt.subplots(
+                    figsize=(12, 5)
+                )
+
+                ax.plot(
+                    train.index,
+                    train,
+                    label='Treino'
+                )
+
+                ax.plot(
+                    test.index,
+                    test,
+                    label='Real'
+                )
+
+                ax.plot(
+                    test.index,
+                    predictions,
+                    label='Predito'
+                )
+
+                ax.legend()
+
+                st.pyplot(fig)
+
+        except Exception as e:
+
+            st.error(
+                f"Erro Série Temporal: {e}"
+            )
+
+        st.stop()
+
+    # ==========================================
+    # CONFIG ML
+    # ==========================================
 
     test_size = st.sidebar.slider(
         "Teste %",
@@ -214,15 +521,16 @@ if uploaded_file is not None:
     # PREPARAÇÃO
     # ==========================================
 
-    st.subheader("🔧 Preparação")
-
     y = df[target_column]
-    X = df.drop(columns=[target_column])
 
-    # remover target nulo
+    X = df.drop(
+        columns=[target_column]
+    )
+
     mask = y.notnull()
 
     X = X[mask]
+
     y = y[mask]
 
     # ==========================================
@@ -234,13 +542,15 @@ if uploaded_file is not None:
         y = y.astype(str)
 
         if y.nunique() < 2:
+
             st.error(
-                "❌ Target precisa ter pelo menos 2 classes."
+                "Target precisa ter 2+ classes."
             )
+
             st.stop()
 
-        # codificar target
         le = LabelEncoder()
+
         y = le.fit_transform(y)
 
     # ==========================================
@@ -257,12 +567,15 @@ if uploaded_file is not None:
         mask = y.notnull()
 
         X = X[mask]
+
         y = y[mask]
 
         if len(y) < 5:
+
             st.error(
-                "❌ Poucos dados válidos para regressão."
+                "Poucos dados válidos."
             )
+
             st.stop()
 
     # ==========================================
@@ -281,31 +594,37 @@ if uploaded_file is not None:
     # PIPELINES
     # ==========================================
 
-    numeric_transformer = Pipeline(steps=[
-        (
-            'imputer',
-            SimpleImputer(strategy='median')
-        ),
-        (
-            'scaler',
-            StandardScaler()
-        )
-    ])
+    numeric_transformer = Pipeline(
+        steps=[
+            (
+                'imputer',
+                SimpleImputer(
+                    strategy='median'
+                )
+            ),
+            (
+                'scaler',
+                StandardScaler()
+            )
+        ]
+    )
 
-    categorical_transformer = Pipeline(steps=[
-        (
-            'imputer',
-            SimpleImputer(
-                strategy='most_frequent'
+    categorical_transformer = Pipeline(
+        steps=[
+            (
+                'imputer',
+                SimpleImputer(
+                    strategy='most_frequent'
+                )
+            ),
+            (
+                'onehot',
+                OneHotEncoder(
+                    handle_unknown='ignore'
+                )
             )
-        ),
-        (
-            'onehot',
-            OneHotEncoder(
-                handle_unknown='ignore'
-            )
-        )
-    ])
+        ]
+    )
 
     preprocessor = ColumnTransformer(
         transformers=[
@@ -323,44 +642,35 @@ if uploaded_file is not None:
     )
 
     # ==========================================
-    # TRANSFORMAÇÃO
+    # PROCESSAMENTO
     # ==========================================
 
     try:
 
         X_processed = preprocessor.fit_transform(X)
 
-        # remover NaN restantes
-        X_processed = np.nan_to_num(X_processed)
-
-    except Exception as e:
-
-        st.error(
-            f"Erro no preprocessamento: {e}"
-        )
-
-        st.stop()
-
-    # ==========================================
-    # TRAIN TEST SPLIT
-    # ==========================================
-
-    try:
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_processed,
-            y,
-            test_size=test_size,
-            random_state=random_state
+        X_processed = np.nan_to_num(
+            X_processed
         )
 
     except Exception as e:
 
         st.error(
-            f"Erro train_test_split: {e}"
+            f"Erro preprocessamento: {e}"
         )
 
         st.stop()
+
+    # ==========================================
+    # SPLIT
+    # ==========================================
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X_processed,
+        y,
+        test_size=test_size,
+        random_state=random_state
+    )
 
     # ==========================================
     # MODELOS
@@ -375,6 +685,7 @@ if uploaded_file is not None:
                 "Decision Tree",
                 "Random Forest",
                 "Gradient Boosting",
+                "XGBoost",
                 "SVM",
                 "KNN",
                 "Naive Bayes"
@@ -384,7 +695,9 @@ if uploaded_file is not None:
         models = {
 
             "Logistic Regression":
-                LogisticRegression(max_iter=2000),
+                LogisticRegression(
+                    max_iter=2000
+                ),
 
             "Decision Tree":
                 DecisionTreeClassifier(),
@@ -394,6 +707,11 @@ if uploaded_file is not None:
 
             "Gradient Boosting":
                 GradientBoostingClassifier(),
+
+            "XGBoost":
+                XGBClassifier(
+                    eval_metric='logloss'
+                ),
 
             "SVM":
                 SVC(),
@@ -414,6 +732,7 @@ if uploaded_file is not None:
                 "Decision Tree",
                 "Random Forest",
                 "Gradient Boosting",
+                "XGBoost",
                 "SVR",
                 "KNN"
             ]
@@ -432,6 +751,9 @@ if uploaded_file is not None:
 
             "Gradient Boosting":
                 GradientBoostingRegressor(),
+
+            "XGBoost":
+                XGBRegressor(),
 
             "SVR":
                 SVR(),
@@ -459,7 +781,9 @@ if uploaded_file is not None:
                     y_train
                 )
 
-                predictions = model.predict(X_test)
+                predictions = model.predict(
+                    X_test
+                )
 
             st.success(
                 "✅ Modelo treinado!"
@@ -479,58 +803,42 @@ if uploaded_file is not None:
 
         if problem_type == "Classificação":
 
-            try:
+            accuracy = accuracy_score(
+                y_test,
+                predictions
+            )
 
-                accuracy = accuracy_score(
-                    y_test,
-                    predictions
-                )
+            st.metric(
+                "Acurácia",
+                f"{accuracy:.4f}"
+            )
 
-                st.metric(
-                    "Acurácia",
-                    f"{accuracy:.4f}"
-                )
+            report = classification_report(
+                y_test,
+                predictions,
+                output_dict=True
+            )
 
-                st.subheader(
-                    "📋 Classification Report"
-                )
+            st.dataframe(
+                pd.DataFrame(report).transpose()
+            )
 
-                report = classification_report(
-                    y_test,
-                    predictions,
-                    output_dict=True
-                )
+            cm = confusion_matrix(
+                y_test,
+                predictions
+            )
 
-                st.dataframe(
-                    pd.DataFrame(report).transpose()
-                )
+            fig, ax = plt.subplots()
 
-                st.subheader(
-                    "📌 Matriz de Confusão"
-                )
+            sns.heatmap(
+                cm,
+                annot=True,
+                fmt='d',
+                cmap='Blues',
+                ax=ax
+            )
 
-                cm = confusion_matrix(
-                    y_test,
-                    predictions
-                )
-
-                fig, ax = plt.subplots()
-
-                sns.heatmap(
-                    cm,
-                    annot=True,
-                    fmt='d',
-                    cmap='Blues',
-                    ax=ax
-                )
-
-                st.pyplot(fig)
-
-            except Exception as e:
-
-                st.error(
-                    f"Erro métricas classificação: {e}"
-                )
+            st.pyplot(fig)
 
         # ==========================================
         # REGRESSÃO
@@ -538,83 +846,94 @@ if uploaded_file is not None:
 
         else:
 
-            try:
+            mse = mean_squared_error(
+                y_test,
+                predictions
+            )
 
-                mse = mean_squared_error(
+            mae = mean_absolute_error(
+                y_test,
+                predictions
+            )
+
+            r2 = r2_score(
+                y_test,
+                predictions
+            )
+
+            mape = (
+                mean_absolute_percentage_error(
                     y_test,
                     predictions
+                ) * 100
+            )
+
+            wape = calculate_wape(
+                y_test,
+                predictions
+            )
+
+            col1, col2, col3, col4, col5 = st.columns(5)
+
+            with col1:
+                st.metric(
+                    "MSE",
+                    f"{mse:.4f}"
                 )
 
-                mae = mean_absolute_error(
-                    y_test,
-                    predictions
+            with col2:
+                st.metric(
+                    "MAE",
+                    f"{mae:.4f}"
                 )
 
-                r2 = r2_score(
-                    y_test,
-                    predictions
+            with col3:
+                st.metric(
+                    "R²",
+                    f"{r2:.4f}"
                 )
 
-                col1, col2, col3 = st.columns(3)
-
-                with col1:
-                    st.metric(
-                        "MSE",
-                        f"{mse:.4f}"
-                    )
-
-                with col2:
-                    st.metric(
-                        "MAE",
-                        f"{mae:.4f}"
-                    )
-
-                with col3:
-                    st.metric(
-                        "R²",
-                        f"{r2:.4f}"
-                    )
-
-                fig, ax = plt.subplots(
-                    figsize=(6, 4)
+            with col4:
+                st.metric(
+                    "MAPE",
+                    f"{mape:.2f}%"
                 )
 
-                ax.scatter(
-                    y_test,
-                    predictions
+            with col5:
+                st.metric(
+                    "WAPE",
+                    f"{wape:.2f}%"
                 )
 
-                ax.set_xlabel(
-                    "Real"
-                )
+            fig, ax = plt.subplots(
+                figsize=(6, 4)
+            )
 
-                ax.set_ylabel(
-                    "Predito"
-                )
+            ax.scatter(
+                y_test,
+                predictions
+            )
 
-                ax.set_title(
-                    "Real vs Predito"
-                )
+            ax.set_xlabel("Real")
 
-                st.pyplot(fig)
+            ax.set_ylabel("Predito")
 
-            except Exception as e:
+            ax.set_title(
+                "Real vs Predito"
+            )
 
-                st.error(
-                    f"Erro métricas regressão: {e}"
-                )
+            st.pyplot(fig)
 
         # ==========================================
         # FEATURE IMPORTANCE
         # ==========================================
 
-        if hasattr(model, "feature_importances_"):
+        if hasattr(
+            model,
+            "feature_importances_"
+        ):
 
             try:
-
-                st.subheader(
-                    "⭐ Feature Importance"
-                )
 
                 cat_names = []
 
@@ -648,6 +967,10 @@ if uploaded_file is not None:
                     ascending=False
                 )
 
+                st.subheader(
+                    "⭐ Feature Importance"
+                )
+
                 st.dataframe(
                     importance_df.head(20)
                 )
@@ -668,44 +991,32 @@ if uploaded_file is not None:
             except Exception as e:
 
                 st.warning(
-                    f"Erro feature importance: {e}"
+                    f"Erro importance: {e}"
                 )
 
         # ==========================================
         # DOWNLOAD
         # ==========================================
 
-        try:
+        output_df = pd.DataFrame({
+            "Real": y_test,
+            "Predito": predictions
+        })
 
-            st.subheader(
-                "⬇️ Download"
-            )
+        csv = output_df.to_csv(
+            index=False
+        ).encode('utf-8')
 
-            output_df = pd.DataFrame({
-                "Real": y_test,
-                "Predito": predictions
-            })
-
-            csv = output_df.to_csv(
-                index=False
-            ).encode('utf-8')
-
-            st.download_button(
-                label="📥 Baixar CSV",
-                data=csv,
-                file_name="predicoes.csv",
-                mime="text/csv"
-            )
-
-        except Exception as e:
-
-            st.warning(
-                f"Erro download: {e}"
-            )
+        st.download_button(
+            label="📥 Baixar CSV",
+            data=csv,
+            file_name="predicoes.csv",
+            mime="text/csv"
+        )
 
 else:
 
     st.info(
         "📌 Faça upload de um CSV."
     )
-
+```
