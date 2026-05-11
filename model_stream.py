@@ -60,7 +60,16 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
 
-    df = pd.read_csv(uploaded_file,encoding='ISO-8859-1')
+    _csv(uploaded_file, encoding=enc)
+            st.success(f"Arquivo lido com encoding: {enc}")
+            st.dataframe(df.head())
+            break
+
+        except Exception as e:
+            uploaded_file.seek(0)
+
+    else:
+        st.error("Não foi possível ler o CSV.")
 
     st.subheader("📊 Preview do Dataset")
     st.dataframe(df.head())
