@@ -58,6 +58,8 @@ uploaded_file = st.file_uploader(
     type=["csv"]
 )
 
+uploaded_file = st.file_uploader("Upload CSV")
+
 if uploaded_file is not None:
 
     _csv(uploaded_file, encoding=enc)
